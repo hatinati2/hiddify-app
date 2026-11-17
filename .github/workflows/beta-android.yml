@@ -1,0 +1,98 @@
+name: Android Beta APK
+
+on:
+  push:
+    branches:
+      - fix/android-12-vpn-stability-5.5.5-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-beta:
+    name: Build Beta.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      CHANNEL: prod
+      IS_GITHUB_ACTIONS: 1
+      FLUTTER_VERSION: "3.38.5"
+      NDK_VERSION: r28c
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2.21.0
+        with:
+          flutter-version: "3.38.5"
+          channel: stable
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          make android-apk-install-deps
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Configure release signing when available
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$ANDROID_SIGNING_KEY" ]]; then
+            mkdir -p android
+            printf '%s' "$ANDROID_SIGNING_KEY" | base64 --decode > android/key.jks
+            {
+              printf 'storeFile=%s/android/key.jks\n' "$GITHUB_WORKSPACE"
+              printf 'storePassword=%s\n' "$ANDROID_SIGNING_STORE_PASSWORD"
+              printf 'keyPassword=%s\n' "$ANDROID_SIGNING_KEY_PASSWORD"
+              printf 'keyAlias=%s\n' "$ANDROID_SIGNING_KEY_ALIAS"
+            } > android/key.properties
+            echo "Release signing key configured."
+          else
+            echo "::warning::ANDROID_SIGNING_KEY is not configured. Beta.apk will use the Android debug signing key; uninstall the store-signed Hiddify first if Android rejects an in-place update."
+          fi
+
+      - name: Prepare production dependencies
+        run: make android-apk-prepare
+
+      - name: Build APKs
+        run: make android-apk-release
+
+      - name: Collect Beta APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="build/app/outputs/flutter-apk"
+          test -f "$source_dir/app-release.apk"
+          mkdir -p beta-output
+          cp "$source_dir/app-release.apk" beta-output/Beta.apk
+          cp "$source_dir"/*arm64-v8a*.apk beta-output/Beta-arm64.apk 2>/dev/null || true
+          cp "$source_dir"/*armeabi-v7a*.apk beta-output/Beta-armv7.apk 2>/dev/null || true
+          cp "$source_dir"/*x86_64*.apk beta-output/Beta-x86_64.apk 2>/dev/null || true
+          ls -lh beta-output
+
+      - name: Upload Beta APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: Beta
+          path: beta-output/*.apk
+          if-no-files-found: error
+          retention-days: 30
