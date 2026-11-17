@@ -3,6 +3,7 @@ import 'package:hiddify/core/preferences/general_preferences.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
+import 'package:hiddify/hiddifycore/hiddify_core_service_provider.dart';
 import 'package:hiddify/features/settings/data/config_option_data_providers.dart';
 import 'package:hiddify/singbox/model/core_status.dart';
 import 'package:hiddify/singbox/model/singbox_config_option.dart';
@@ -26,6 +27,8 @@ SingboxConfigOption proxyPreviewOptions(SingboxConfigOption options) => options.
   localProxyAuth: false,
   localProxyInVpn: false,
 );
+
+final proxyPreviewControllerProvider = Provider<ProxyPreviewController>((ref) => ProxyPreviewController(ref));
 
 class ProxyPreviewController {
   ProxyPreviewController(this.ref);
