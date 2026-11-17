@@ -3,30 +3,12 @@ import 'package:hiddify/core/preferences/general_preferences.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/features/settings/data/config_option_data_providers.dart';
-import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
-import 'package:hiddify/hiddifycore/hiddify_core_service_provider.dart';
-import 'package:hiddify/hiddifycore/init_signal.dart';
 import 'package:hiddify/singbox/model/core_status.dart';
 import 'package:hiddify/singbox/model/singbox_config_option.dart';
 import 'package:hiddify/utils/platform_utils.dart';
-import 'package:meta/meta.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-
-/// True while a profile is running in the desktop-only, proxy-only preview engine.
-/// The connection repository uses this to keep preview separate from a real VPN session.
-final proxyPreviewActiveProvider = StateProvider<bool>((ref) => false);
-final proxyPreviewStartingProvider = StateProvider<bool>((ref) => false);
-final proxyPreviewErrorProvider = StateProvider<String?>((ref) => null);
-
-final proxyPreviewGroupProvider = StreamProvider<OutboundGroup?>((ref) {
-  ref.watch(coreRestartSignalProvider);
-  if (!ref.watch(proxyPreviewActiveProvider)) return Stream.value(null);
-  return ref.watch(hiddifyCoreServiceProvider).watchGroup();
-});
-
-final proxyPreviewControllerProvider = Provider<ProxyPreviewController>((ref) {
-  return ProxyPreviewController(ref);
-});
+import 'package:meta/meta.dart';
 
 /// A copy of the profile's effective options that can test outbounds without changing
 /// the operating system's routing, tunnel, or proxy settings.
