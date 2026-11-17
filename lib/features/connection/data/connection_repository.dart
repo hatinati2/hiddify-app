@@ -137,7 +137,27 @@ class ConnectionRepositoryImpl with ExceptionHandler, InfraLogger implements Con
                 profilePathResolver.file(activeProfile.id).path,
                 activeProfile.name,
                 disableMemoryLimit,
-              ),
+              ).flatMap((_) {
+                final selection = ref.read(proxyPreviewSelectionProvider);
+                if (selection == null || selection.profileId != activeProfile.id) return TaskEither.of(unit);
+
+                // The preview engine is stopped before a normal connection starts. Re-apply the
+                // chosen selector after the real engine is ready; if selection fails, stop rather
+                // than leave the user connected through a different server than the one chosen.
+                return TaskEither<ConnectionFailure, Unit>(() async {
+                  final result = await singbox.selectOutbound(selection.groupTag, selection.outboundTag).run();
+                  return await result.match(
+                    (error) async {
+                      await singbox.stop().run();
+                      return left(UnexpectedConnectionFailure(error));
+                    },
+                    (_) async {
+                      ref.read(proxyPreviewSelectionProvider.notifier).state = null;
+                      return right(unit);
+                    },
+                  );
+                });
+              }),
             ),
       );
 
