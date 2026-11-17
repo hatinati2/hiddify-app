@@ -1,0 +1,77 @@
+name: Windows feature build
+
+on:
+  push:
+    branches:
+      - feat/preconnect-proxy-tests
+    paths:
+      - '.github/workflows/windows-feature-build.yml'
+      - 'lib/**'
+      - 'windows/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'Makefile'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-feature-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codegen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-flutter
+        with:
+          platform: common
+          install-deps: false
+      - name: Pack generated Dart code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files --others -- lib test > "$RUNNER_TEMP/generated-files.txt"
+          test -s "$RUNNER_TEMP/generated-files.txt"
+          tar -czf generated-code.tar.gz -T "$RUNNER_TEMP/generated-files.txt"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: generated-code
+          path: generated-code.tar.gz
+          retention-days: 1
+
+  windows:
+    needs: codegen
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CHANNEL: dev
+      IS_GITHUB_ACTIONS: 1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-flutter
+        with:
+          platform: windows
+          generated-code: true
+      - name: Build and validate Windows Release
+        shell: pwsh
+        run: make windows-validate
+      - name: Package Windows Setup.exe
+        shell: pwsh
+        run: make windows-exe-release
+      - name: Package Windows portable ZIP
+        shell: pwsh
+        run: make windows-zip-release
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v6
+        with:
+          name: hiddify-windows-feature-build
+          path: |
+            dist/**/*.exe
+            dist/**/*.zip
+          if-no-files-found: error
+          retention-days: 7
