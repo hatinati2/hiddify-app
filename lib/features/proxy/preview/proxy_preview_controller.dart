@@ -1,13 +1,11 @@
-import 'dart:async';
-
-import 'package:fpdart/fpdart.dart';
+import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/preferences/general_preferences.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
-import 'package:hiddify/features/profile/data/profile_path_resolver.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/features/settings/data/config_option_data_providers.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 import 'package:hiddify/hiddifycore/hiddify_core_service_provider.dart';
+import 'package:hiddify/hiddifycore/init_signal.dart';
 import 'package:hiddify/singbox/model/core_status.dart';
 import 'package:hiddify/singbox/model/singbox_config_option.dart';
 import 'package:hiddify/utils/platform_utils.dart';
@@ -21,6 +19,7 @@ final proxyPreviewStartingProvider = StateProvider<bool>((ref) => false);
 final proxyPreviewErrorProvider = StateProvider<String?>((ref) => null);
 
 final proxyPreviewGroupProvider = StreamProvider<OutboundGroup?>((ref) {
+  ref.watch(coreRestartSignalProvider);
   if (!ref.watch(proxyPreviewActiveProvider)) return Stream.value(null);
   return ref.watch(hiddifyCoreServiceProvider).watchGroup();
 });
@@ -74,8 +73,10 @@ class ProxyPreviewController {
 
     final core = ref.read(hiddifyCoreServiceProvider);
     try {
+      final t = await ref.read(translationsProvider.future);
       if (!PlatformUtils.isWindows && !PlatformUtils.isLinux) {
-        throw UnsupportedError('Server preview is currently available on Windows and Linux desktop.');
+        ref.read(proxyPreviewErrorProvider.notifier).state = t.pages.proxyPreview.desktopOnly;
+        return;
       }
 
       final setup = await core.setup().run();
@@ -83,7 +84,8 @@ class ProxyPreviewController {
 
       // Never take over a connection the user already has running.
       if (core.currentState is! CoreStopped) {
-        throw StateError('Disconnect the current connection before testing this profile.');
+        ref.read(proxyPreviewErrorProvider.notifier).state = t.pages.proxyPreview.disconnectFirst;
+        return;
       }
 
       final profiles = await ref.read(profileRepositoryProvider.future);
@@ -119,13 +121,10 @@ class ProxyPreviewController {
       started.match((error) => throw error, (_) {});
 
       // Start with a full scan, as v2rayNG does; the stream updates each row as results arrive.
-      try {
-        await testAll();
-      } catch (error) {
-        ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
-      }
+      await testAll();
     } catch (error) {
-      ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
+      final message = (await ref.read(translationsProvider.future)).pages.proxyPreview.startFailed;
+      ref.read(proxyPreviewErrorProvider.notifier).state = message;
       await _stopAndRestore();
     } finally {
       ref.read(proxyPreviewStartingProvider.notifier).state = false;
@@ -137,8 +136,9 @@ class ProxyPreviewController {
     try {
       final result = await ref.read(hiddifyCoreServiceProvider).urlTest('select').run();
       result.match((error) => throw StateError(error), (_) {});
-    } catch (error) {
-      ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
+    } catch (_) {
+      ref.read(proxyPreviewErrorProvider.notifier).state =
+          (await ref.read(translationsProvider.future)).pages.proxyPreview.testFailed;
     }
   }
 
@@ -147,8 +147,9 @@ class ProxyPreviewController {
     try {
       final result = await ref.read(hiddifyCoreServiceProvider).urlTest(tag).run();
       result.match((error) => throw StateError(error), (_) {});
-    } catch (error) {
-      ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
+    } catch (_) {
+      ref.read(proxyPreviewErrorProvider.notifier).state =
+          (await ref.read(translationsProvider.future)).pages.proxyPreview.testFailed;
     }
   }
 
@@ -174,7 +175,8 @@ class ProxyPreviewController {
       final stopped = await core.stop().run();
       final stopError = stopped.match((error) => error, (_) => null);
       if (stopError != null) {
-        ref.read(proxyPreviewErrorProvider.notifier).state = 'Could not stop the preview engine: $stopError';
+        ref.read(proxyPreviewErrorProvider.notifier).state =
+            (await ref.read(translationsProvider.future)).pages.proxyPreview.stopFailed;
         return;
       }
     }
@@ -185,7 +187,7 @@ class ProxyPreviewController {
       final restoreError = restored.match((error) => error, (_) => null);
       if (restoreError != null) {
         ref.read(proxyPreviewErrorProvider.notifier).state =
-            'The preview stopped, but the previous settings could not be restored: $restoreError';
+            (await ref.read(translationsProvider.future)).pages.proxyPreview.restoreFailed;
         return;
       }
       _originalOptions = null;
