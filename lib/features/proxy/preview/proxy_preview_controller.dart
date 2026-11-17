@@ -2,11 +2,11 @@ import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/preferences/general_preferences.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
 import 'package:hiddify/features/settings/data/config_option_data_providers.dart';
 import 'package:hiddify/singbox/model/core_status.dart';
 import 'package:hiddify/singbox/model/singbox_config_option.dart';
 import 'package:hiddify/utils/platform_utils.dart';
-import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:meta/meta.dart';
 
