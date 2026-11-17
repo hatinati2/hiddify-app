@@ -35,6 +35,7 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
     final starting = ref.watch(proxyPreviewStartingProvider);
     final active = ref.watch(proxyPreviewActiveProvider);
     final error = ref.watch(proxyPreviewErrorProvider);
+    final selection = ref.watch(proxyPreviewSelectionProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -87,6 +88,13 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                   label: Text(t.pages.proxyPreview.testAll),
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(t.pages.proxyPreview.selectionHint, style: theme.textTheme.bodySmall),
             ),
           ),
           if (starting) const LinearProgressIndicator(),
@@ -161,6 +169,8 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                         : proxy.status == Status.FAILED || delay < 0
                         ? t.pages.proxyPreview.unavailable
                         : t.pages.proxyPreview.untested;
+                    final selected = selection?.profileId == widget.profileId &&
+                        selection?.outboundTag == proxy.tag;
                     final color = reachable
                         ? theme.colorScheme.primary
                         : proxy.status == Status.FAILED || delay < 0
@@ -168,6 +178,16 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                         : theme.colorScheme.onSurfaceVariant;
 
                     return ListTile(
+                      selected: selected,
+                      onTap: reachable && active && !starting
+                          ? () {
+                              ref.read(proxyPreviewSelectionProvider.notifier).state = (
+                                profileId: widget.profileId,
+                                groupTag: value!.tag,
+                                outboundTag: proxy.tag,
+                              );
+                            }
+                          : null,
                       title: Text(proxy.tagDisplay.isEmpty ? proxy.name : proxy.tagDisplay),
                       subtitle: Text(proxy.typeWithoutStatus, maxLines: 1, overflow: TextOverflow.ellipsis),
                       leading: Icon(
@@ -183,6 +203,10 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (selected) ...[
+                            Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary, size: 20),
+                            const SizedBox(width: 6),
+                          ],
                           Text(label, style: theme.textTheme.labelLarge?.copyWith(color: color)),
                           IconButton(
                             tooltip: t.pages.proxies.testDelay,
