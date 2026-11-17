@@ -63,6 +63,42 @@ jobs:
       - name: Package Windows Setup.exe
         shell: pwsh
         run: make windows-exe-release
+      - name: Smoke install and launch Windows Setup.exe
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path dist -Filter '*setup.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Windows Setup.exe was not produced.' }
+
+          $installDir = Join-Path $env:RUNNER_TEMP 'hiddify-setup-smoke'
+          $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=`"$installDir`"")
+          $setup = Start-Process -FilePath $installer.FullName -ArgumentList $setupArgs -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "Setup.exe failed with exit code $($setup.ExitCode)." }
+
+          $appPath = Join-Path $installDir 'Hiddify.exe'
+          foreach ($required in @('Hiddify.exe', 'HiddifyCore.exe', 'HiddifyCoreEngine.exe')) {
+            if (-not (Test-Path (Join-Path $installDir $required))) {
+              throw "Installed app is missing $required."
+            }
+          }
+
+          $process = Start-Process -FilePath $appPath -WorkingDirectory $installDir -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $process.Refresh()
+            if ($process.HasExited) {
+              throw "Installed Hiddify exited during startup (exit code $($process.ExitCode))."
+            }
+          }
+          finally {
+            if (-not $process.HasExited) {
+              & taskkill.exe /PID $process.Id /T /F | Out-Null
+            }
+          }
+
+          $uninstaller = Join-Path $installDir 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Windows uninstaller was not installed.' }
+          $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
+          if ($remove.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($remove.ExitCode)." }
       - name: Package Windows portable ZIP
         shell: pwsh
         run: make windows-zip-release
