@@ -105,6 +105,20 @@
       "title": "Home",
       "quickSettings": "Quick settings"
     },
+    "proxyPreview": {
+      "title": "Test servers before connecting",
+      "subtitle": "Check each server's reachability and response time.",
+      "safetyNote": "Preview only: Hiddify does not enable the VPN tunnel or change your system proxy while testing.",
+      "testAll": "Test all",
+      "finish": "Finish testing",
+      "loading": "Loading server list…",
+      "noServers": "No servers were found in this profile.",
+      "testing": "Testing…",
+      "unavailable": "Not responding",
+      "untested": "Not tested yet",
+      "startFailed": "Could not start or complete the server test.",
+      "retry": "Retry"
+    },
     "proxies": {
       "title": "Proxies",
       "sort": "Sort proxies",
@@ -228,6 +242,7 @@
     },
     "profiles": {
       "title": "Profiles",
+      "testServers": "Test servers before connecting",
       "add": "Add profile",
       "fromPhone": {
         "title": "Add from your phone",
