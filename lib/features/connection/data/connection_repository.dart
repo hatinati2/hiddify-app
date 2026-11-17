@@ -12,7 +12,7 @@ import 'package:hiddify/core/router/dialog/widgets/admin_bg_service_dialogs.dart
 import 'package:hiddify/core/utils/exception_handler.dart';
 import 'package:hiddify/features/connection/model/connection_failure.dart';
 import 'package:hiddify/features/connection/model/connection_status.dart';
-import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/data/profile_path_resolver.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
