@@ -53,6 +53,7 @@ class ProxyPreviewController {
   }
 
   Future<void> _start(String profileId) async {
+    ref.read(proxyPreviewSelectionProvider.notifier).state = null;
     ref.read(proxyPreviewErrorProvider.notifier).state = null;
     ref.read(proxyPreviewStartingProvider.notifier).state = true;
 
