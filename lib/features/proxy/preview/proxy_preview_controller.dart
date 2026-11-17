@@ -11,6 +11,7 @@ import 'package:hiddify/hiddifycore/hiddify_core_service_provider.dart';
 import 'package:hiddify/singbox/model/core_status.dart';
 import 'package:hiddify/singbox/model/singbox_config_option.dart';
 import 'package:hiddify/utils/platform_utils.dart';
+import 'package:meta/meta.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 /// True while a profile is running in the desktop-only, proxy-only preview engine.
@@ -133,14 +134,22 @@ class ProxyPreviewController {
 
   Future<void> testAll() async {
     if (!ref.read(proxyPreviewActiveProvider)) return;
-    final result = await ref.read(hiddifyCoreServiceProvider).urlTest('select').run();
-    result.match((error) => throw StateError(error), (_) {});
+    try {
+      final result = await ref.read(hiddifyCoreServiceProvider).urlTest('select').run();
+      result.match((error) => throw StateError(error), (_) {});
+    } catch (error) {
+      ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
+    }
   }
 
   Future<void> testOne(String tag) async {
     if (!ref.read(proxyPreviewActiveProvider)) return;
-    final result = await ref.read(hiddifyCoreServiceProvider).urlTest(tag).run();
-    result.match((error) => throw StateError(error), (_) {});
+    try {
+      final result = await ref.read(hiddifyCoreServiceProvider).urlTest(tag).run();
+      result.match((error) => throw StateError(error), (_) {});
+    } catch (error) {
+      ref.read(proxyPreviewErrorProvider.notifier).state = error.toString();
+    }
   }
 
   /// Stops the temporary engine and restores the user's normal options before leaving the page.
