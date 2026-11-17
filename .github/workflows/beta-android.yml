@@ -1,9 +1,9 @@
-name: Android HyBeta3 APK
+name: Android HyBeta4 Real Delay APK
 
 on:
   push:
     branches:
-      - hybeta3/core-5.9.8-20261117
+      - hybeta4/real-delay-v2raywatch-20261117
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   android-beta:
-    name: Build HyBeta3.apk
+    name: Build HyBeta4 Real Delay APK
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -23,6 +23,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Checkout pinned Hiddify Core
+        uses: actions/checkout@v6
+        with:
+          repository: hiddify/hiddify-core
+          ref: v5.9.8
+          path: hiddify-core
+          submodules: false
+
+      - name: Initialize pinned Core submodules
+        run: |
+          set -euo pipefail
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global --add url."https://github.com/".insteadOf ssh://git@github.com/
+          git -C hiddify-core submodule sync --recursive
+          git -C hiddify-core submodule update --init --recursive
+          test "$(git -C hiddify-core/hiddify-sing-box rev-parse HEAD)" = "9dbf55dde90870dc2692ed5372e30ec7c7bbcfd6"
+
+      - name: Setup Go for pinned Core
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: hiddify-core/go.mod
+          cache: true
+          cache-dependency-path: |
+            hiddify-core/go.sum
+            hiddify-core/hiddify-sing-box/go.sum
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2.21.0
@@ -41,6 +67,12 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
 
       - name: Install build tools
         run: |
@@ -67,32 +99,47 @@ jobs:
             } > android/key.properties
             echo "Release signing key configured."
           else
-            echo "::warning::ANDROID_SIGNING_KEY is not configured. HyBeta3.apk will use the Android debug signing key; uninstall the store-signed Hiddify first if Android rejects an in-place update."
+            echo "::warning::ANDROID_SIGNING_KEY is not configured. HyBeta4.apk will use the Android debug signing key; uninstall the store-signed Hiddify first if Android rejects an in-place update."
           fi
 
-      - name: Prepare production dependencies
-        run: make android-apk-prepare
+      - name: Prepare Flutter production dependencies
+        run: make common-prepare
+
+      - name: Apply V2rayWatch Real Delay and build Core
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/apply-v2raywatch-real-delay.py
+          gofmt -w hiddify-core/hiddify-sing-box/common/urltest/urltest.go hiddify-core/hiddify-sing-box/common/urltest/h_urltest_test.go
+          (
+            cd hiddify-core/hiddify-sing-box
+            go test ./common/urltest
+          )
+          make -C hiddify-core android
+          mkdir -p android/app/libs
+          cp hiddify-core/bin/hiddify-core.aar android/app/libs/hiddify-core.aar
 
       - name: Build APKs
         run: make android-apk-release
 
-      - name: Collect HyBeta3 APK
+      - name: Collect HyBeta4 APK
         shell: bash
         run: |
           set -euo pipefail
           source_dir="build/app/outputs/flutter-apk"
           test -f "$source_dir/app-release.apk"
           mkdir -p beta-output
-          cp "$source_dir/app-release.apk" beta-output/HyBeta3-universal.apk
-          cp "$source_dir"/*arm64-v8a*.apk beta-output/HyBeta3-arm64.apk 2>/dev/null || true
-          cp "$source_dir"/*armeabi-v7a*.apk beta-output/HyBeta3-armv7.apk 2>/dev/null || true
-          cp "$source_dir"/*x86_64*.apk beta-output/HyBeta3-x86_64.apk 2>/dev/null || true
+          cp "$source_dir/app-release.apk" beta-output/HyBeta4-universal.apk
+          cp "$source_dir"/*arm64-v8a*.apk beta-output/HyBeta4-arm64.apk 2>/dev/null || true
+          cp "$source_dir"/*armeabi-v7a*.apk beta-output/HyBeta4-armv7.apk 2>/dev/null || true
+          cp "$source_dir"/*x86_64*.apk beta-output/HyBeta4-x86_64.apk 2>/dev/null || true
           ls -lh beta-output
 
       - name: Upload Beta APK
         uses: actions/upload-artifact@v6
         with:
-          name: HyBeta3
+          name: HyBeta4
           path: beta-output/*.apk
           if-no-files-found: error
           retention-days: 30
