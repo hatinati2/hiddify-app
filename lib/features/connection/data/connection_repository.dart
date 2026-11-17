@@ -12,6 +12,7 @@ import 'package:hiddify/core/router/dialog/widgets/admin_bg_service_dialogs.dart
 import 'package:hiddify/core/utils/exception_handler.dart';
 import 'package:hiddify/features/connection/model/connection_failure.dart';
 import 'package:hiddify/features/connection/model/connection_status.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/data/profile_path_resolver.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
@@ -83,8 +84,10 @@ class ConnectionRepositoryImpl with ExceptionHandler, InfraLogger implements Con
 
   @override
   Stream<ConnectionStatus> watchConnectionStatus() {
-    return singbox.watchStatus().map(
-      (event) => switch (event) {
+    return singbox.watchStatus().map((event) {
+      // A proxy preview is an isolated test session, not a VPN connection.
+      if (ref.read(proxyPreviewActiveProvider)) return const Disconnected();
+      return switch (event) {
         CoreStopped() => Disconnected(event.getCoreAlert()),
         CoreStarting() => const Connecting(),
         CoreWaiting() => const Waiting(),
@@ -92,8 +95,8 @@ class ConnectionRepositoryImpl with ExceptionHandler, InfraLogger implements Con
         CoreStarted() => const Connected(),
         CoreStopping() => const Disconnecting(),
         CoreHotReloading() => const HotReloading(),
-      },
-    );
+      };
+    });
   }
 
   /// Set while a connect runs: the VPN choice dialog was shown, and then the administrator prompt
@@ -105,17 +108,24 @@ class ConnectionRepositoryImpl with ExceptionHandler, InfraLogger implements Con
   /// administrator prompt (or stopped waiting for it), the choice is offered again instead of an
   /// error, so they can try again or switch to system proxy mode.
   @override
-  TaskEither<ConnectionFailure, Unit> connect(ProfileEntity activeProfile, bool disableMemoryLimit) => setup().flatMap(
-    (_) => TaskEither(() async {
-      while (true) {
-        _vpnChoiceShown = false;
-        _adminRefused = false;
-        final result = await _connectOnce(activeProfile, disableMemoryLimit).run();
-        if (result.isRight() || !_vpnChoiceShown || !_adminRefused) return result;
-        loggy.info("administrator permission was not given, offering the choice again");
-      }
-    }),
-  );
+  TaskEither<ConnectionFailure, Unit> connect(ProfileEntity activeProfile, bool disableMemoryLimit) {
+    if (ref.read(proxyPreviewActiveProvider)) {
+      return TaskEither.left(
+        const ConnectionFailure.unexpected('Stop server testing before starting a connection.'),
+      );
+    }
+    return setup().flatMap(
+      (_) => TaskEither(() async {
+        while (true) {
+          _vpnChoiceShown = false;
+          _adminRefused = false;
+          final result = await _connectOnce(activeProfile, disableMemoryLimit).run();
+          if (result.isRight() || !_vpnChoiceShown || !_adminRefused) return result;
+          loggy.info("administrator permission was not given, offering the choice again");
+        }
+      }),
+    );
+  }
 
   TaskEither<ConnectionFailure, Unit> _connectOnce(ProfileEntity activeProfile, bool disableMemoryLimit) =>
       applyConfigOption(activeProfile).flatMap(
