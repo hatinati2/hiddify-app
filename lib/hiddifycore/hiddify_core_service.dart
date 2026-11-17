@@ -36,7 +36,9 @@ class HiddifyCoreService with InfraLogger {
 
   CoreStatus currentState = const CoreStatus.stopped();
   final statusController = BehaviorSubject<CoreStatus>();
-  final CallOptions grpcOptions = CallOptions(timeout: const Duration(seconds: 10));
+  // Keep streaming listeners unbounded; only settings RPCs use this deadline.
+  final CallOptions? grpcOptions = null;
+  final CallOptions settingsGrpcOptions = CallOptions(timeout: const Duration(seconds: 10));
   final Map<String, StreamSubscription?> subscriptions = {};
   OutboundGroupList latest = OutboundGroupList();
 
@@ -142,12 +144,12 @@ class HiddifyCoreService with InfraLogger {
         }
         final res = await core.fgClient.changeHiddifySettings(
           ChangeHiddifySettingsRequest(hiddifySettingsJson: jsonEncode(options.toJson())),
-          options: grpcOptions,
+          options: settingsGrpcOptions,
         );
         if (res.messageType != MessageType.EMPTY) return left("${res.messageType} ${res.message}");
         await core.bgClient.changeHiddifySettings(
           ChangeHiddifySettingsRequest(hiddifySettingsJson: jsonEncode(options.toJson())),
-          options: grpcOptions,
+          options: settingsGrpcOptions,
         );
       } on GrpcError catch (e) {
         if (e.code == StatusCode.unavailable) {
