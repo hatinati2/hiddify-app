@@ -36,7 +36,7 @@ class HiddifyCoreService with InfraLogger {
 
   CoreStatus currentState = const CoreStatus.stopped();
   final statusController = BehaviorSubject<CoreStatus>();
-  final CallOptions? grpcOptions = null; //CallOptions(timeout: const Duration(milliseconds: 10000));
+  final CallOptions grpcOptions = CallOptions(timeout: const Duration(seconds: 10));
   final Map<String, StreamSubscription?> subscriptions = {};
   OutboundGroupList latest = OutboundGroupList();
 
@@ -142,10 +142,12 @@ class HiddifyCoreService with InfraLogger {
         }
         final res = await core.fgClient.changeHiddifySettings(
           ChangeHiddifySettingsRequest(hiddifySettingsJson: jsonEncode(options.toJson())),
+          options: grpcOptions,
         );
         if (res.messageType != MessageType.EMPTY) return left("${res.messageType} ${res.message}");
         await core.bgClient.changeHiddifySettings(
           ChangeHiddifySettingsRequest(hiddifySettingsJson: jsonEncode(options.toJson())),
+          options: grpcOptions,
         );
       } on GrpcError catch (e) {
         if (e.code == StatusCode.unavailable) {
@@ -294,17 +296,22 @@ class HiddifyCoreService with InfraLogger {
       if (core.managesLifecycle || core.managedStatus != null) {
         try {
           // Bound like _stopAndWait: a hung VPN channel must not leave Disconnecting forever.
-          await core.stop().timeout(
+          final stopped = await core.stop().timeout(
             const Duration(seconds: 12),
             onTimeout: () {
               loggy.warning("managed core stop timed out after 12s");
               return false;
             },
           );
+          if (!stopped) {
+            const message = "VPN service did not confirm that it stopped";
+            loggy.warning(message);
+            return left(message);
+          }
           statusController.add(currentState = const CoreStatus.stopped());
           return right(unit);
         } catch (error) {
-          statusController.add(currentState = const CoreStatus.stopped());
+          loggy.error("managed core stop failed: $error");
           return left(error.toString());
         }
       }
