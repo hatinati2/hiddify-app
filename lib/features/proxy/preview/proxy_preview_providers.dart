@@ -9,6 +9,11 @@ final proxyPreviewActiveProvider = StateProvider<bool>((ref) => false);
 final proxyPreviewStartingProvider = StateProvider<bool>((ref) => false);
 final proxyPreviewErrorProvider = StateProvider<String?>((ref) => null);
 
+/// A server chosen during preview; applied after the matching profile connects normally.
+typedef ProxyPreviewSelection = ({String profileId, String groupTag, String outboundTag});
+
+final proxyPreviewSelectionProvider = StateProvider<ProxyPreviewSelection?>((ref) => null);
+
 final proxyPreviewGroupProvider = StreamProvider<OutboundGroup?>((ref) {
   // The managed desktop core can switch from the foreground library to its isolated engine.
   ref.watch(coreRestartSignalProvider);
