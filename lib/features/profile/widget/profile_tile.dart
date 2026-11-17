@@ -321,7 +321,6 @@ class ProfileActionButton extends HookConsumerWidget {
       ),
     );
   }, key: const ValueKey('menu'));
-  }
 }
 
 /// A minimal, continuously spinning icon shown in the leading slot while a
