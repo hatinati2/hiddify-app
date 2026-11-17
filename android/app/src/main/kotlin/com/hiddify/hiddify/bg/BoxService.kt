@@ -47,6 +47,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 
 class BoxService(
@@ -121,6 +123,12 @@ class BoxService(
     private val status = MutableLiveData(Status.Stopped)
     private val binder = ServiceBinder(status)
     private val notification = ServiceNotification(status, service)
+
+    // libbox setup and close mutate process-wide native state; never overlap them.
+    private val lifecycleMutex = Mutex()
+    private val lifecycleStateLock = Any()
+    @Volatile
+    private var stopRequested = false
 //    private var boxService: BoxService? = null
     private var commandServer: CommandServer? = null
     private var receiverRegistered = false
@@ -150,7 +158,7 @@ class BoxService(
 
     private suspend fun startService() {
         try {
-            status.postValue(Status.Starting)
+            if (stopRequested) return
             Log.d(TAG, "starting service")
             withContext(Dispatchers.Main) {
                 notification.show(activeProfileName, R.string.status_starting)
@@ -172,6 +180,7 @@ class BoxService(
             }
 
             DefaultNetworkMonitor.start()
+            if (stopRequested) return
             Libbox.setMemoryLimit(!Settings.disableMemoryLimit)
             activePlatformInterface = platformInterface
             // 2 = GRPC_BACKGROUND (mTLS), 4 = GRPC_BACKGROUND_INSECURE. Must match Mobile.close.
@@ -193,14 +202,21 @@ class BoxService(
                 // the core trusts the client certificate stored in the base folder by itself
             } catch (e: Exception) {
                 Log.e(TAG, "Mobile.setup failed", e)
-                stopAndAlert(Alert.CreateService, e.message ?: e.toString())
+                if (!stopRequested) stopAndAlert(Alert.CreateService, e.message ?: e.toString())
                 return
             }
-            status.postValue(Status.Started)
-
-            if (Settings.startCoreAfterStartingService){
-                Mobile.start("","")
+            if (stopRequested) return
+            withContext(Dispatchers.Main) {
+                synchronized(lifecycleStateLock) {
+                    if (!stopRequested) status.value = Status.Started
                 }
+            }
+            if (stopRequested) return
+
+            if (Settings.startCoreAfterStartingService) {
+                Mobile.start("", "")
+            }
+            if (stopRequested) return
 //            if (delayStart) {
 //                delay(1000L)
 //            }
@@ -215,7 +231,7 @@ class BoxService(
             }
             notification.start()
         } catch (e: Exception) {
-            stopAndAlert(Alert.StartService, e.message)
+            if (!stopRequested) stopAndAlert(Alert.StartService, e.message ?: e.toString())
             return
         }
     }
@@ -276,60 +292,81 @@ class BoxService(
     }
 
     private fun stopService() {
-        if (status.value == Status.Stopped) return
-        status.value = Status.Stopping
+        // Claim the transition synchronously so duplicate close broadcasts cannot start
+        // multiple workers that close the same VPN descriptor and libbox instance.
+        val shouldStop = synchronized(lifecycleStateLock) {
+            if (status.value == Status.Stopped || status.value == Status.Stopping) {
+                false
+            } else {
+                stopRequested = true
+                status.value = Status.Stopping
+                true
+            }
+        }
+        if (!shouldStop) return
+
         if (receiverRegistered) {
             service.unregisterReceiver(receiver)
             receiverRegistered = false
         }
         notification.close()
+
         GlobalScope.launch(Dispatchers.IO) {
-            val pfd = fileDescriptor
-            if (pfd != null) {
-                pfd.close()
+            lifecycleMutex.withLock {
+                val pfd = fileDescriptor
                 fileDescriptor = null
-            }
-//            commandServer?.setService(null)
-//            boxService?.apply {
-//                runCatching {
-//                    close()
-//                }.onFailure {
-//                    writeLog("service: error when closing: $it")
-//                }
-//                //Seq.destroyRef(refnum)
-//            }
+                if (pfd != null) {
+                    runCatching { pfd.close() }
+                        .onFailure { Log.w(TAG, "failed to close VPN descriptor", it) }
+                }
 
-//            boxService = null
-//            Libbox.registerLocalDNSTransport(null)
-            DefaultNetworkMonitor.stop()
+                runCatching { DefaultNetworkMonitor.stop() }
+                    .onFailure { Log.w(TAG, "failed to stop network monitor", it) }
 
-//            commandServer?.apply {
-//                close()
-//                Seq.destroyRef(refnum)
-//            }
-//            commandServer = null
-            Settings.startedByUser = false
-            if (activePlatformInterface === platformInterface) activePlatformInterface = null
-            // Close the mode we actually started. Old code always closed 4 (insecure), so
-            // mTLS background (mode 2) left :17079 listening and reconnect failed with
-            // "background service did not stop".
-            // Closing stops the core, which can take seconds: never on the main thread, or the
-            // app freezes while it disconnects.
-            val closeStart = System.currentTimeMillis()
-            for (mode in linkedSetOf(grpcSetupMode, 2L, 4L)) {
-                Mobile.close(mode)
+                Settings.startedByUser = false
+                if (activePlatformInterface === platformInterface) activePlatformInterface = null
+
+                // Close the mode actually started, plus the supported background modes.
+                // Native calls remain off the main thread and serialized against setup.
+                val closeStart = System.currentTimeMillis()
+                for (mode in linkedSetOf(grpcSetupMode, 2L, 4L)) {
+                    runCatching { Mobile.close(mode) }
+                        .onFailure { Log.w(TAG, "failed to close Mobile mode $mode", it) }
+                }
+                Log.i(TAG, "core closed in ${System.currentTimeMillis() - closeStart}ms")
+
+                withContext(Dispatchers.Main) {
+                    synchronized(lifecycleStateLock) {
+                        status.value = Status.Stopped
+                    }
+                    service.stopSelf()
+                }
+                notification.close()
             }
-            Log.i(TAG, "core closed in ${System.currentTimeMillis() - closeStart}ms")
-            withContext(Dispatchers.Main) {
-                status.value = Status.Stopped
-                service.stopSelf()
-            }
-            notification.close()
         }
     }
 
     private suspend fun stopAndAlert(type: Alert, message: String? = null) {
         Settings.startedByUser = false
+        // Startup may fail after registering a network callback or partly creating the
+        // VPN gRPC service. Unwind those resources before publishing Stopped.
+        withContext(Dispatchers.IO) {
+            runCatching { DefaultNetworkMonitor.stop() }
+                .onFailure { Log.w(TAG, "failed to stop network monitor after startup error", it) }
+            if (activePlatformInterface === platformInterface) activePlatformInterface = null
+
+            val pfd = fileDescriptor
+            fileDescriptor = null
+            if (pfd != null) {
+                runCatching { pfd.close() }
+                    .onFailure { Log.w(TAG, "failed to close VPN descriptor after startup error", it) }
+            }
+            for (mode in linkedSetOf(grpcSetupMode, 2L, 4L)) {
+                runCatching { Mobile.close(mode) }
+                    .onFailure { Log.w(TAG, "failed to close Mobile mode $mode after startup error", it) }
+            }
+        }
+
         withContext(Dispatchers.Main) {
             if (receiverRegistered) {
                 service.unregisterReceiver(receiver)
@@ -339,19 +376,28 @@ class BoxService(
             binder.broadcast { callback ->
                 callback.onServiceAlert(type.ordinal, message)
             }
-            status.value = Status.Stopped
+            synchronized(lifecycleStateLock) {
+                status.value = Status.Stopped
+            }
+            service.stopSelf()
         }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     @Suppress("SameReturnValue")
     internal fun onStartCommand(): Int {
-        // Already up or starting: ignore duplicate start intents.
+        // Already up or starting: the existing foreground notification covers this start.
         if (status.value == Status.Started || status.value == Status.Starting) {
             return Service.START_NOT_STICKY
         }
-        // A stop is still tearing down Mobile/VPN; wait then start so reconnect
-        // after disconnect does not hit CreateService from a raced Mobile.setup.
+
+        // Android expects startForeground soon after startForegroundService. Promote the service
+        // before native core initialization, which can take longer on slower devices.
+        activeProfileName = Settings.activeProfileName
+        notification.show(activeProfileName, R.string.status_starting)
+
+        // If stop is in progress, keep this start foreground while closing the old core, then
+        // request a clean start rather than racing Mobile.setup against Mobile.close.
         if (status.value == Status.Stopping) {
             GlobalScope.launch(Dispatchers.IO) {
                 var i = 0
@@ -364,11 +410,17 @@ class BoxService(
                         Application.application,
                         Intent(Application.application, Settings.serviceClass()),
                     )
+                } else {
+                    Log.e(TAG, "not restarting VPN service: previous stop did not finish")
                 }
             }
             return Service.START_NOT_STICKY
         }
-        status.value = Status.Starting
+
+        synchronized(lifecycleStateLock) {
+            stopRequested = false
+            status.value = Status.Starting
+        }
 
         if (!receiverRegistered) {
             ContextCompat.registerReceiver(service, receiver, IntentFilter().apply {
@@ -381,15 +433,17 @@ class BoxService(
         }
 
         GlobalScope.launch(Dispatchers.IO) {
-            Settings.startedByUser = true
-            initialize()
-//            try {
-//                startCommandServer()
-//            } catch (e: Exception) {
-//                stopAndAlert(Alert.StartCommandServer, e.message)
-//                return@launch
-//            }
-            startService()
+            lifecycleMutex.withLock {
+                if (stopRequested) return@withLock
+                Settings.startedByUser = true
+                try {
+                    initialize()
+                    if (!stopRequested) startService()
+                } catch (e: Exception) {
+                    Log.e(TAG, "VPN service initialization failed", e)
+                    if (!stopRequested) stopAndAlert(Alert.StartService, e.message ?: e.toString())
+                }
+            }
         }
         return Service.START_NOT_STICKY
     }
