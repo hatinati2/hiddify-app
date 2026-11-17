@@ -60,6 +60,7 @@ object DefaultNetworkMonitor {
                     continue
                 }
                 listener.updateDefaultInterface(interfaceName, interfaceIndex, false, false)
+                break
             }
         } else {
             listener.updateDefaultInterface("", -1, false, false)
