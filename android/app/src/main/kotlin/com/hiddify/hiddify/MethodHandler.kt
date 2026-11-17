@@ -160,6 +160,12 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                                 }
                             }
                         }
+                        val finalStatus = mainActivity.serviceStatus.value
+                        if (finalStatus != null && finalStatus != Status.Stopped) {
+                            throw IllegalStateException(
+                                "VPN service did not stop within 10 seconds (status=$finalStatus)"
+                            )
+                        }
                         success(true)
                     }
                 }
