@@ -70,7 +70,7 @@ jobs:
           if ($null -eq $installer) { throw 'Windows Setup.exe was not produced.' }
 
           $installDir = Join-Path $env:RUNNER_TEMP 'hiddify-setup-smoke'
-          $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=`"$installDir`"")
+          $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$installDir`"")
           $setup = Start-Process -FilePath $installer.FullName -ArgumentList $setupArgs -PassThru -Wait
           if ($setup.ExitCode -ne 0) { throw "Setup.exe failed with exit code $($setup.ExitCode)." }
 
