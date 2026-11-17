@@ -18,6 +18,7 @@ import 'package:hiddify/features/profile/notifier/active_profile_notifier.dart';
 import 'package:hiddify/features/profile/overview/profiles_page.dart';
 import 'package:hiddify/features/proxy/overview/proxies_overview_page.dart';
 import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_providers.dart';
 import 'package:hiddify/features/proxy/preview/proxy_preview_page.dart';
 import 'package:hiddify/features/route_rules/notifier/rule_notifier.dart';
 import 'package:hiddify/features/route_rules/overview/generic_list_page.dart';
