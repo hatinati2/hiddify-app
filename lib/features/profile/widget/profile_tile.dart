@@ -354,6 +354,12 @@ class ProfileActionsMenu extends HookConsumerWidget {
         leadingIcon: Icon(profile.pinned ? Icons.push_pin : Icons.push_pin_outlined),
         onTap: () => ref.read(profilesNotifierProvider.notifier).togglePin(profile),
       ),
+      if (PlatformUtils.isWindows || PlatformUtils.isLinux)
+        AdaptiveMenuItem(
+          title: t.pages.profiles.testServers,
+          leadingIcon: const Icon(Icons.speed_rounded),
+          onTap: () => context.pushNamed('proxyPreview', pathParameters: {'id': profile.id}),
+        ),
       if (profile case RemoteProfileEntity())
         AdaptiveMenuItem(
           title: t.common.update,
