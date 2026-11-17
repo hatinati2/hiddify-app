@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/model/constants.dart';
-import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
 import 'package:hiddify/features/proxy/model/proxy_entity.dart';
+import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -81,7 +81,7 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                 Expanded(child: Text(t.pages.proxyPreview.subtitle, style: theme.textTheme.bodyMedium)),
                 const SizedBox(width: 8),
                 FilledButton.tonalIcon(
-                  onPressed: active ? () => ref.read(proxyPreviewControllerProvider).testAll() : null,
+                  onPressed: active && !starting ? () => ref.read(proxyPreviewControllerProvider).testAll() : null,
                   icon: const Icon(Icons.speed_rounded),
                   label: Text(t.pages.proxyPreview.testAll),
                 ),
@@ -102,10 +102,7 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                       Icon(Icons.error_outline_rounded, color: theme.colorScheme.onErrorContainer),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          t.pages.proxyPreview.startFailed,
-                          style: TextStyle(color: theme.colorScheme.onErrorContainer),
-                        ),
+                        child: Text(error, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
                       ),
                       if (!active)
                         IconButton(
@@ -188,7 +185,7 @@ class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
                           Text(label, style: theme.textTheme.labelLarge?.copyWith(color: color)),
                           IconButton(
                             tooltip: t.pages.proxies.testDelay,
-                            onPressed: active ? () => ref.read(proxyPreviewControllerProvider).testOne(proxy.tag) : null,
+                            onPressed: active && !starting ? () => ref.read(proxyPreviewControllerProvider).testOne(proxy.tag) : null,
                             icon: const Icon(Icons.refresh_rounded),
                           ),
                         ],
