@@ -3,16 +3,31 @@ import 'package:go_router/go_router.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/model/constants.dart';
 import 'package:hiddify/features/proxy/preview/proxy_preview_controller.dart';
+import 'package:hiddify/features/proxy/model/proxy_entity.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-class ProxyPreviewPage extends ConsumerWidget {
+class ProxyPreviewPage extends ConsumerStatefulWidget {
   const ProxyPreviewPage({super.key, required this.profileId});
 
   final String profileId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProxyPreviewPage> createState() => _ProxyPreviewPageState();
+}
+
+class _ProxyPreviewPageState extends ConsumerState<ProxyPreviewPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(proxyPreviewControllerProvider).start(widget.profileId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final t = ref.watch(translationsProvider).requireValue;
     final theme = Theme.of(context);
     final group = ref.watch(proxyPreviewGroupProvider);
@@ -95,7 +110,7 @@ class ProxyPreviewPage extends ConsumerWidget {
                       if (!active)
                         IconButton(
                           tooltip: t.pages.proxyPreview.retry,
-                          onPressed: () => ref.read(proxyPreviewControllerProvider).start(profileId),
+                          onPressed: () => ref.read(proxyPreviewControllerProvider).start(widget.profileId),
                           icon: const Icon(Icons.refresh_rounded),
                         ),
                     ],
