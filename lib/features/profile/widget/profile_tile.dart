@@ -93,7 +93,7 @@ class ProfileTile extends HookConsumerWidget {
             children: [
               if (showActionButton) ...[
                 SizedBox(
-                  width: 48,
+                  width: isMain && profile is RemoteProfileEntity ? 96 : 48,
                   child: Semantics(
                     sortKey: const OrdinalSortKey(1),
                     child: ProfileActionButton(profile, !isMain, squareBottom: showLinks),
@@ -274,35 +274,52 @@ class ProfileActionButton extends HookConsumerWidget {
       }
 
       if (!showAllActions) {
-        return Semantics(
-          key: const ValueKey('update'),
-          button: true,
-          child: Tooltip(
-            message: t.pages.profiles.update,
-            child: InkWell(
-              borderRadius: ProfileTileConst.startBorderRadius(Directionality.of(context), squareBottom: squareBottom),
-              onTap: () => ref
-                  .read(updateProfileNotifierProvider(profile.id).notifier)
-                  .updateProfile(profile as RemoteProfileEntity),
-              child: const Icon(Icons.sync_rounded),
+        // The home-card action slot used to contain only Update, so the server preview
+        // was unreachable from the active profile. Keep Update and expose the same profile
+        // menu alongside it.
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(
+              child: Semantics(
+                key: const ValueKey('update'),
+                button: true,
+                child: Tooltip(
+                  message: t.pages.profiles.update,
+                  child: InkWell(
+                    borderRadius: ProfileTileConst.startBorderRadius(
+                      Directionality.of(context),
+                      squareBottom: squareBottom,
+                    ),
+                    onTap: () => ref
+                        .read(updateProfileNotifierProvider(profile.id).notifier)
+                        .updateProfile(profile as RemoteProfileEntity),
+                    child: const Center(child: Icon(Icons.sync_rounded)),
+                  ),
+                ),
+              ),
             ),
-          ),
+            Expanded(child: _profileMenu(context)),
+          ],
         );
       }
     }
-    return ProfileActionsMenu(profile, (context, toggleVisibility, _) {
-      return Semantics(
-        button: true,
-        child: Tooltip(
-          message: MaterialLocalizations.of(context).showMenuTooltip,
-          child: InkWell(
-            borderRadius: ProfileTileConst.startBorderRadius(Directionality.of(context), squareBottom: squareBottom),
-            onTap: toggleVisibility,
-            child: Icon(AdaptiveIcon(context).more),
-          ),
+    return _profileMenu(context);
+  }
+
+  Widget _profileMenu(BuildContext context) => ProfileActionsMenu(profile, (context, toggleVisibility, _) {
+    return Semantics(
+      button: true,
+      child: Tooltip(
+        message: MaterialLocalizations.of(context).showMenuTooltip,
+        child: InkWell(
+          borderRadius: ProfileTileConst.startBorderRadius(Directionality.of(context), squareBottom: squareBottom),
+          onTap: toggleVisibility,
+          child: Icon(AdaptiveIcon(context).more),
         ),
-      );
-    }, key: const ValueKey('menu'));
+      ),
+    );
+  }, key: const ValueKey('menu'));
   }
 }
 
