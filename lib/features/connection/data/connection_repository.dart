@@ -110,9 +110,8 @@ class ConnectionRepositoryImpl with ExceptionHandler, InfraLogger implements Con
   @override
   TaskEither<ConnectionFailure, Unit> connect(ProfileEntity activeProfile, bool disableMemoryLimit) {
     if (ref.read(proxyPreviewActiveProvider)) {
-      return TaskEither.left(
-        const ConnectionFailure.unexpected('Stop server testing before starting a connection.'),
-      );
+      final message = ref.read(translationsProvider).requireValue.pages.proxyPreview.disconnectFirst;
+      return TaskEither.left(ConnectionFailure.unexpected(message));
     }
     return setup().flatMap(
       (_) => TaskEither(() async {
