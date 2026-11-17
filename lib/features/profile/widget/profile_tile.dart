@@ -49,7 +49,8 @@ class ProfileTile extends HookConsumerWidget {
       _ => null,
     };
 
-    final showActionButton = profile is RemoteProfileEntity || !isMain;
+    final showActionButton =
+        profile is RemoteProfileEntity || !isMain || PlatformUtils.isWindows || PlatformUtils.isLinux;
 
     void handleTap() {
       if (isMain) {
