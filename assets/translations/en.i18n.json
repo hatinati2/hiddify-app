@@ -116,7 +116,12 @@
       "testing": "Testing…",
       "unavailable": "Not responding",
       "untested": "Not tested yet",
-      "startFailed": "Could not start or complete the server test.",
+      "startFailed": "Could not start the server preview.",
+      "desktopOnly": "Server preview is currently available on Windows and Linux desktop.",
+      "disconnectFirst": "Disconnect the current VPN connection before testing servers.",
+      "testFailed": "The server test could not be started.",
+      "stopFailed": "The preview engine could not be stopped. Try again.",
+      "restoreFailed": "The preview stopped, but the normal settings could not be restored. Try again.",
       "retry": "Retry"
     },
     "proxies": {
