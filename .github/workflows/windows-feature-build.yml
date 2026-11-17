@@ -66,6 +66,36 @@ jobs:
       - name: Package Windows portable ZIP
         shell: pwsh
         run: make windows-zip-release
+      - name: Smoke launch Windows portable app
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path dist -Filter '*windows.zip' -Recurse | Select-Object -First 1
+          if ($null -eq $archive) { throw 'Portable Windows archive was not produced.' }
+
+          $smokeDir = Join-Path $env:RUNNER_TEMP 'hiddify-windows-smoke'
+          Expand-Archive -Path $archive.FullName -DestinationPath $smokeDir -Force
+
+          $appDir = Join-Path $smokeDir 'Hiddify'
+          $appPath = Join-Path $appDir 'Hiddify.exe'
+          foreach ($required in @('Hiddify.exe', 'HiddifyCore.exe', 'HiddifyCoreEngine.exe')) {
+            if (-not (Test-Path (Join-Path $appDir $required))) {
+              throw "Portable package is missing $required."
+            }
+          }
+
+          $process = Start-Process -FilePath $appPath -WorkingDirectory $appDir -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $process.Refresh()
+            if ($process.HasExited) {
+              throw "Hiddify exited during startup (exit code $($process.ExitCode))."
+            }
+          }
+          finally {
+            if (-not $process.HasExited) {
+              & taskkill.exe /PID $process.Id /T /F | Out-Null
+            }
+          }
       - name: Upload Windows installers
         uses: actions/upload-artifact@v6
         with:
