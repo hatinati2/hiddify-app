@@ -108,7 +108,7 @@
     "proxyPreview": {
       "title": "Test servers before connecting",
       "subtitle": "Check each server's reachability and response time.",
-      "selectionHint": "Tap a responding server to use it the next time you connect.",
+      "selectionHint": "Tap a responding server to use it the next time you connect this profile.",
       "safetyNote": "Preview only: Hiddify does not enable the VPN tunnel or change your system proxy while testing.",
       "testAll": "Test all",
       "finish": "Finish testing",
